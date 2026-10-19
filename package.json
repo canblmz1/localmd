@@ -71,7 +71,7 @@
     "@vitejs/plugin-vue": "^5.0.5",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.39",
-    "psj-ai-sdk": "https://github.com/canblmz1/prefix-safe-json/releases/download/psj-ai-sdk-v0.1.0/psj-ai-sdk-0.1.0.tgz",
+    "psj-ai-sdk": "https://github.com/canblmz1/prefix-safe-json/releases/download/psj-ai-sdk-v0.2.0/psj-ai-sdk-0.2.0.tgz",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.4.5",
     "vite": "^5.4.0",
