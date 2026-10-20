@@ -18,6 +18,11 @@ hook setup. It does not disable peer checks. The original locked AI SDK
 `7.0.29`, compatible provider `3.0.11` and core `0.6.1` remain unchanged.
 Run the same focused command before and after a later SDK lockfile update.
 
+On Windows, preserve committed LF Markdown in a fresh clone with
+`git clone --config core.autocrlf=false --config core.eol=lf ...`. The existing
+static-page tests expect LF frontmatter; a CRLF checkout fails that suite on
+the old pilot too. This dependency update does not change the parser.
+
 The complete native and guarded controls both return two full 12,000-character
 tool results under their original IDs and retain them in step history. The
 guarded duplicate-ID and malformed-sibling cases must release no callbacks and
