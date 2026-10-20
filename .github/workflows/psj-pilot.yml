@@ -1,0 +1,105 @@
+name: PSJ pilot old and new clean consumers
+
+on:
+  push:
+    branches: [ci/psj-pilot-032]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.pilot }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        pilot: [old, candidate]
+        include:
+          - pilot: old
+            source: 694e4146c14b589a79f0d3f39a54f62c4dda7479
+          - pilot: candidate
+            source: fefb45e6256f0bf057bb21e8bbb94a31663aca55
+    defaults:
+      run:
+        shell: bash
+    env:
+      E2E_PORT: 5232
+    steps:
+      - name: Preserve committed LF text in both checkouts
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: canblmz1/localmd
+          ref: ${{ matrix.source }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.2
+      - name: Match npm version
+        run: npm install -g npm@10.9.8 --ignore-scripts --no-audit --no-fund
+      - name: Record environment and exact source
+        run: |
+          {
+            git rev-parse HEAD
+            node --version
+            npm --version
+            node -p 'process.platform + " " + require("node:os").release() + " " + process.arch'
+            git ls-files --eol site
+          } | tee environment.log
+          test ! -e node_modules
+      - name: Install committed lockfile with peer checks
+        id: install
+        continue-on-error: true
+        run: npm ci --ignore-scripts --strict-peer-deps --no-audit --no-fund --prefer-online --cache "$RUNNER_TEMP/npm-pilot" --fetch-retries=1 --fetch-timeout=25000 2>&1 | tee install.log
+      - name: Record installed versions
+        if: steps.install.outcome == 'success'
+        run: |
+          node -e 'for (const n of ["psj-ai-sdk", "prefix-safe-json", "ai", "@ai-sdk/openai-compatible"]) console.log(n, require("./node_modules/" + n + "/package.json").version)' | tee versions.log
+          git diff --exit-code
+      - name: Nine existing focused checks
+        id: focused
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npx --no-install vitest run src/agent/run.test.ts src/agent/tool-stream-regression.test.ts src/agent/tool-stream-recording.test.ts --reporter=verbose 2>&1 | tee focused.log
+      - name: Project typecheck
+        id: types
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run typecheck 2>&1 | tee typecheck.log
+      - name: Full unit suite
+        id: unit
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run test -- --maxWorkers=1 --no-file-parallelism 2>&1 | tee unit.log
+      - name: Prepare system Chrome for declared browser checks
+        id: browser
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npx --no-install playwright install chrome 2>&1 | tee browser-setup.log
+      - name: Declared Playwright suite on this checkout
+        id: e2e
+        if: steps.install.outcome == 'success' && steps.browser.outcome == 'success'
+        continue-on-error: true
+        run: npm run test:e2e 2>&1 | tee e2e.log
+      - name: Preserve every result, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: psj-${{ matrix.pilot }}-${{ matrix.os }}
+          path: |
+            *.log
+            test-results
+            playwright-report
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce actual outcomes
+        if: always()
+        run: |
+          for outcome in '${{ steps.install.outcome }}' '${{ steps.focused.outcome }}' '${{ steps.types.outcome }}' '${{ steps.unit.outcome }}' '${{ steps.browser.outcome }}' '${{ steps.e2e.outcome }}'; do
+            test "$outcome" = success || exit 1
+          done
